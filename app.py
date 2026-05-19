@@ -570,8 +570,10 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
     print(f"  -> Loading {'all' if nrows is None else nrows} rows...")
     t0 = time.perf_counter()
     X, y, _ = load_and_preprocess(MERGED_CSV, scaler=scaler, chunksize=100_000)
-    if nrows:
-        X, y = X[:nrows], y[:nrows]
+    if nrows and nrows < len(X):
+        X, _, y, _ = train_test_split(
+            X, y, train_size=nrows, stratify=y, random_state=42
+        )
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=42
