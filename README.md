@@ -1,5 +1,7 @@
 # 🛡️ SWaT Streaming Anomaly Detection & Security Radar
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ml-for-streaming-data-ttzdt5cixfpqq6gkdedse7.streamlit.app/)
+
 A real-time, high-performance streaming machine learning pipeline and interactive dashboard for cyber-physical attack detection on the **Secure Water Treatment (SWaT)** industrial dataset. Built with LightGBM, Streamlit, and Plotly, this system features sub-5ms inference latency, thread-safe background streaming simulation, and a fully responsive user interface.
 
 ---
