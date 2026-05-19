@@ -1229,14 +1229,64 @@ def run_streamlit_dashboard() -> None:
         font-size:11px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase;
         color:#228be6; border-bottom:1px solid #e9ecef; padding-bottom:8px; margin:28px 0 14px;
       }
+      .header-title {
+        font-size: clamp(1.4rem, 4vw, 1.8rem);
+        font-weight: 800;
+        color: #343a40;
+        margin-bottom: 0;
+      }
+      .header-subtitle {
+        color: #868e96;
+        font-size: clamp(12px, 2.5vw, 14px);
+        margin-top: 4px;
+        margin-bottom: 20px;
+      }
+      .status-card {
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      }
+      .status-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .status-info {
+        flex: 1 1 300px;
+      }
+      .status-metrics {
+        text-align: right;
+        color: #495057;
+        font-size: 14px;
+        flex: 1 1 200px;
+      }
+      @media (max-width: 768px) {
+        .status-container {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .status-metrics {
+          text-align: left;
+          flex: 1 1 auto;
+        }
+        .block-container {
+          padding: 1.5rem 1rem !important;
+        }
+      }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <h1 style='font-size:1.8rem;font-weight:800;color:#343a40;margin-bottom:0;'>
+    <h1 class="header-title">
       🛡️ Tesis Güvenlik Radarı
     </h1>
-    <p style='color:#868e96;font-size:14px;margin-top:4px;margin-bottom:20px;'>
+    <p class="header-subtitle">
       Gerçek Zamanlı Yapay Zeka Denetimi
     </p>
     """, unsafe_allow_html=True)
@@ -1302,13 +1352,13 @@ def run_streamlit_dashboard() -> None:
         assistant_text = "Tesis normal parametreler içerisinde çalışıyor. Herhangi bir tehdit yok."
 
     st.markdown(f"""
-    <div style="background: #ffffff; border: 1px solid #e9ecef; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h2 style="color: {status_color}; margin: 0; font-size: 24px; font-weight: 800;">{status_text}</h2>
+    <div class="status-card">
+        <div class="status-container">
+            <div class="status-info">
+                <h2 style="color: {status_color}; margin: 0; font-size: clamp(1.2rem, 3.5vw, 1.5rem); font-weight: 800;">{status_text}</h2>
                 <p style="color: #868e96; margin: 4px 0 0 0; font-size: 14px;">🤖 <b>Asistan:</b> {assistant_text}</p>
             </div>
-            <div style="text-align: right; color: #495057; font-size: 14px;">
+            <div class="status-metrics">
                 <b>İşlenen Kayıt:</b> {total_rec:,} <br/>
                 <b>Anomali:</b> <span style="color: {'#fa5252' if total_anom>0 else '#40c057'}; font-weight: bold;">{total_anom:,}</span> <br/>
                 <b>Hız:</b> {avg_lat:.2f} ms
