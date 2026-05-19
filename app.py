@@ -821,7 +821,7 @@ def create_mini() -> None:
 
     print("Reading full dataset (this may take a moment)...")
     total_rows = 1_441_719
-    skip = 1_390_000
+    skip = 1_360_000
 
     header = pd.read_csv(src, nrows=0).columns.tolist()
     df = pd.read_csv(src, skiprows=skip, names=header)
