@@ -811,24 +811,34 @@ def run_pipeline(args) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def create_mini() -> None:
-    """Downsizes the merged dataset to the last 50,000 rows for web deployment."""
-    src = MERGED_CSV
+    """Creates a mini-dataset alternating between Normal and Attack blocks for dynamic dashboard demonstration."""
+    src_normal = NORMAL_CSV
+    src_attack = ATTACK_CSV
     dst = MINI_CSV
 
-    if not src.exists():
-        print(f"Source merged.csv not found at {src}!")
+    if not src_normal.exists() or not src_attack.exists():
+        print("Source normal.csv or attack.csv not found!")
         return
 
-    print("Reading full dataset (this may take a moment)...")
-    total_rows = 1_441_719
-    skip = 1_360_000
+    print("Loading subsets of normal and attack datasets...")
+    normal_df = pd.read_csv(src_normal, nrows=30000)
+    attack_df = pd.read_csv(src_attack, nrows=30000)
 
-    header = pd.read_csv(src, nrows=0).columns.tolist()
-    df = pd.read_csv(src, skiprows=skip, names=header)
+    print("Creating alternating normal and attack blocks of size 1000...")
+    chunks = []
+    chunk_size = 1000
+    num_chunks = min(len(normal_df), len(attack_df)) // chunk_size
 
-    print(f"Saving {len(df)} rows to merged_mini.csv...")
+    for i in range(num_chunks):
+        start = i * chunk_size
+        end = start + chunk_size
+        chunks.append(normal_df.iloc[start:end])
+        chunks.append(attack_df.iloc[start:end])
+
+    df = pd.concat(chunks, ignore_index=True)
+    print(f"Saving {len(df)} alternating rows to merged_mini.csv...")
     df.to_csv(dst, index=False)
-    print("Done! merged_mini.csv is ready.")
+    print("Done! Alternating merged_mini.csv is ready.")
 
 
 def generate_presentation() -> None:
