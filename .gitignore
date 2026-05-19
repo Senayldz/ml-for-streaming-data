@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Data files (extremely large files >10MB)
+dataset/*.csv
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project local caches
+.ipynb_checkpoints/
+.streamlit/

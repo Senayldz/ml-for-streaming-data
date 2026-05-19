@@ -1,0 +1,81 @@
+====================================================================
+  SWaT STREAMING ANOMALY DETECTION  -  PROJECT REPORT
+====================================================================
+
+--------------------------------------------------------------------
+  SECTION 1 : TECH STACK & DATASET
+--------------------------------------------------------------------
+
+  DATASET
+    Name :                            SWaT (Secure Water Treatment)
+    Source :                          iTrust, Singapore University of Technology
+    Total Records :                   1,441,719 rows
+    Features :                        51 numeric sensor / actuator readings
+    Label Distribution :              ~96.2% Normal  |  ~3.8% Attack
+    Files :                           normal.csv  |  attack.csv  |  merged.csv
+
+  ALGORITHMS & LIBRARIES
+    Primary Detector :                LightGBM (LGBMClassifier)
+    Class Imbalance Handling :        scale_pos_weight (auto ratio ~25x)
+    Hyperparameters :                 n_estimators=300, max_depth=6, lr=0.1
+    Preprocessing :                   Incremental StandardScaler (sklearn)
+    Unsupervised Baseline :           IsolationForest (contamination=0.04)
+    Streaming Engine :                Python generators (batch + record mode)
+    Dashboard :                       Streamlit + Plotly (real-time thread-safe)
+
+--------------------------------------------------------------------
+  SECTION 2 : METHODOLOGY & PIPELINE
+--------------------------------------------------------------------
+
+  STEP 1 - DATA INGESTION & PREPROCESSING
+  The SWaT dataset CSVs are ingested in configurable chunks
+  (100,000 rows) to avoid memory overflow. Column names are
+  stripped of whitespace and the binary label (Normal / Attack)
+  is encoded as 0 / 1. An incremental StandardScaler is fitted
+  exclusively on normal.csv via partial_fit, then persisted.
+
+  STEP 2 - MODEL TRAINING
+  merged.csv (normal + attack rows) is loaded and split 80/20
+  with stratification to preserve the 3.8% attack ratio. LightGBM
+  is trained on the 80% split with scale_pos_weight.
+
+  STEP 3 - STREAMING SIMULATION & INFERENCE
+  The held-out 20% test split is fed through a generator-based
+  streaming engine in configurable mini-batches (default: 256
+  records). ThroughputTracker wraps each inference call.
+
+  STEP 4 - EVALUATION
+  Binary predictions and attack probability scores are collected
+  across all batches. Sklearn computes Precision, Recall, F1,
+  ROC-AUC, and the confusion matrix.
+
+--------------------------------------------------------------------
+  SECTION 3 : CLASSIFICATION METRICS
+--------------------------------------------------------------------
+
+    Precision :                       0.000000
+    Recall :                          0.000000
+    F1-Score :                        0.000000
+    ROC-AUC :                         0.000000
+
+  Confusion Matrix
+  --------------------------------------
+    True Positives  (TP) :                     0
+    True Negatives  (TN) :                10,000
+    False Positives (FP) :                     0
+    False Negatives (FN) :                     0
+
+--------------------------------------------------------------------
+  SECTION 4 : STREAMING PERFORMANCE METRICS
+--------------------------------------------------------------------
+
+    Records Streamed :                157
+    Wall-clock Time (s) :             1.4201
+    Throughput (rec/s) :              110.56
+    Latency Mean   (ms) :             8.9128
+    Latency Median (ms) :             8.0429
+    Latency p95    (ms) :             11.3199
+    Latency p99    (ms) :             29.4041
+    Latency Max    (ms) :             50.2566
+
+====================================================================
