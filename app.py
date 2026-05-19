@@ -809,7 +809,7 @@ def run_pipeline(args) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def create_mini() -> None:
-    """Downsizes the merged dataset to the last 200,000 rows for web deployment."""
+    """Downsizes the merged dataset to the last 50,000 rows for web deployment."""
     src = MERGED_CSV
     dst = MINI_CSV
 
@@ -819,7 +819,7 @@ def create_mini() -> None:
 
     print("Reading full dataset (this may take a moment)...")
     total_rows = 1_441_719
-    skip = 1_200_000
+    skip = 1_390_000
 
     header = pd.read_csv(src, nrows=0).columns.tolist()
     df = pd.read_csv(src, skiprows=skip, names=header)

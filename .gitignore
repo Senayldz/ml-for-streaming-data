@@ -12,6 +12,7 @@ env/
 
 # Data files (extremely large files >10MB)
 dataset/*.csv
+!dataset/merged_mini.csv
 
 # OS generated files
 .DS_Store
