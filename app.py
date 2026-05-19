@@ -1233,7 +1233,10 @@ def run_streamlit_dashboard() -> None:
       html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
       .stApp { background: #f8f9fa; color: #000000; }
       .stApp p, .stApp span, .stApp label { color: #000000; }
-      button p, button span, button div { color: #ffffff !important; }
+      button[kind="primary"] p, button[kind="primary"] span, button[kind="primary"] div { color: #ffffff !important; }
+      button[kind="secondary"] p, button[kind="secondary"] span, button[kind="secondary"] div { color: #000000 !important; }
+      button[data-testid="stBaseButton-primary"] p, button[data-testid="stBaseButton-primary"] span, button[data-testid="stBaseButton-primary"] div { color: #ffffff !important; }
+      button[data-testid="stBaseButton-secondary"] p, button[data-testid="stBaseButton-secondary"] span, button[data-testid="stBaseButton-secondary"] div { color: #000000 !important; }
       #MainMenu, footer, header { visibility: hidden; }
       [data-testid="collapsedControl"] { display: none; }
       [data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color: #000000 !important; font-weight: 600; }
