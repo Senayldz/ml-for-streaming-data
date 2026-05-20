@@ -567,7 +567,7 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
         _print_step("Stage 2 | Loading saved model (--no-retrain)")
         detector = BaseDetector.load(model_path)
         print("  -> Rebuilding test split (temporal) from merged.csv for evaluation...")
-        X, y, _ = load_and_preprocess(MERGED_CSV, scaler=scaler, chunksize=100_000)
+        X, y, _ = load_and_preprocess(MERGED_CSV, scaler=None, chunksize=100_000)
         split_idx = int(len(X) * 0.8)
         X_test = X[split_idx:]
         y_test = y[split_idx:]
@@ -581,7 +581,7 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
     nrows = train_rows
     print(f"  -> Loading {'all' if nrows is None else nrows} rows...")
     t0 = time.perf_counter()
-    X, y, _ = load_and_preprocess(MERGED_CSV, scaler=scaler, chunksize=100_000)
+    X, y, _ = load_and_preprocess(MERGED_CSV, scaler=None, chunksize=100_000)
     if nrows and nrows < len(X):
         X, y = X[:nrows], y[:nrows]
 
@@ -590,6 +590,9 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
     y_train, y_test = y[:split_idx], y[split_idx:]
     print(f"  -> Train: {len(X_train):,}  |  Test: {len(X_test):,}")
     print(f"  -> Attack ratio  train={y_train.mean():.4f}  test={y_test.mean():.4f}")
+
+    print("  -> Scaling training data...")
+    X_train = scaler.transform(X_train).astype(np.float32)
 
     extra_kwargs = {"input_dim": X.shape[1]} if model_name == "autoencoder" else {}
     detector = build_detector(model_name, **extra_kwargs)
@@ -605,39 +608,73 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
     return detector, X_test, y_test
 
 
-def stage_stream_inference(detector, X_test, y_test, stream_rows: int, batch_size: int):
-    _print_step("Stage 3 | Streaming inference (test split)")
+import hashlib
+
+class BockerBloomFilter:
+    """A simple 'Bocker filter' (Bloom Filter) to drop duplicate streaming packets."""
+    def __init__(self, size=1000000):
+        self.size = size
+        self.bit_array = np.zeros(size, dtype=bool)
+        self.duplicates_dropped = 0
+
+    def add_and_check(self, record_array):
+        # Hash the record
+        h = int(hashlib.md5(record_array.tobytes()).hexdigest(), 16) % self.size
+        if self.bit_array[h]:
+            self.duplicates_dropped += 1
+            return True # It is a duplicate
+        self.bit_array[h] = True
+        return False # Not a duplicate
+
+
+def stage_stream_inference(detector, scaler, X_test, y_test, stream_rows: int, batch_size: int):
+    _print_step("Stage 3 | Streaming inference (Record-by-Record & Bocker Filter)")
     n_stream = min(stream_rows, len(X_test))
     print(f"  -> Streaming {n_stream:,} records from held-out stratified test split")
     print(f"  -> Attack rate in stream: {y_test[:n_stream].mean():.4f}")
-    print(f"  -> Batch size : {batch_size}")
-
+    
     tracker   = ThroughputTracker()
     all_preds = []
     all_proba = []
+    y_stream_filtered = []
     seen      = 0
+    
+    bocker = BockerBloomFilter()
 
     X_stream = X_test[:n_stream]
     y_stream = y_test[:n_stream]
 
-    for start in range(0, n_stream, batch_size):
-        end     = min(start + batch_size, n_stream)
-        X_batch = X_stream[start:end]
+    print("  -> Preprocessing row-by-row (No batch processing)...")
+    for i in range(n_stream):
+        row_unscaled = X_stream[i:i+1]
+        
+        # 1. Bocker Filter (Duplicate Drop)
+        if bocker.add_and_check(row_unscaled):
+            continue
+            
+        y_stream_filtered.append(y_stream[i])
+        
+        # 2. Record-by-record preprocessing
+        row_scaled = scaler.transform(row_unscaled).astype(np.float32)
+        
+        # 3. Inference
         with tracker.measure():
-            preds = detector.predict(X_batch)
-            proba = detector.predict_proba(X_batch)
-        all_preds.append(preds)
+            pred = detector.predict(row_scaled)
+            proba = detector.predict_proba(row_scaled)
+            
+        all_preds.append(pred)
         all_proba.append(proba)
-        seen += len(X_batch)
+        seen += 1
 
         if seen % 10_000 == 0:
-            print(f"  -> Processed {seen:,} records...", end="\r", flush=True)
+            print(f"  -> Processed {seen:,} records... (Dropped {bocker.duplicates_dropped} duplicates)", end="\r", flush=True)
 
-    print(f"\n  -> Inference complete: {seen:,} records")
+    print(f"\n  -> Inference complete: {seen:,} unique records streamed (Dropped {bocker.duplicates_dropped} duplicates via Bocker filter)")
 
     y_pred = np.concatenate(all_preds)
     y_prob = np.concatenate(all_proba)
-    return y_pred, y_prob, y_stream, tracker
+    y_stream_final = np.array(y_stream_filtered)
+    return y_pred, y_prob, y_stream_final, tracker
 
 
 def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict, model_name: str = "lgbm") -> str:
@@ -835,7 +872,7 @@ def run_pipeline(args) -> None:
         scaler, args.model, args.train_rows, args.no_retrain
     )
     y_pred, y_prob, y_true, tracker = stage_stream_inference(
-        detector, X_test, y_test, args.stream_rows, args.batch_size
+        detector, scaler, X_test, y_test, args.stream_rows, args.batch_size
     )
     stage_evaluate(y_true, y_pred, y_prob, tracker, model_name=args.model)
 

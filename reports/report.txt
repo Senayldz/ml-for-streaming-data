@@ -15,11 +15,11 @@
     Files :                           normal.csv  |  attack.csv  |  merged.csv
 
   ALGORITHMS & LIBRARIES
-    Primary Detector :                Isolation Forest (Unsupervised)
-    Class Imbalance Handling :        N/A (Unsupervised anomaly detection)
-    Hyperparameters :                 n_estimators=100, contamination=0.04
+    Primary Detector :                LightGBM (LGBMClassifier)
+    Class Imbalance Handling :        scale_pos_weight (auto ratio ~25x)
+    Hyperparameters :                 n_estimators=300, max_depth=6, lr=0.1
     Preprocessing :                   Incremental StandardScaler (sklearn)
-    Unsupervised Baseline :           N/A (Primary model is Isolation Forest)
+    Unsupervised Baseline :           IsolationForest (contamination=0.04)
     Streaming Engine :                Python generators (batch + record mode)
     Dashboard :                       Streamlit + Plotly (real-time thread-safe)
 
@@ -35,8 +35,9 @@
   exclusively on normal.csv via partial_fit, then persisted.
 
   STEP 2 - MODEL TRAINING
-  The unsupervised ISOFOREST model is trained exclusively on the
-  normal operation records from the 80% temporal split.
+  merged.csv (normal + attack rows) is loaded and split 80/20
+  with stratification to preserve the 3.8% attack ratio. LightGBM
+  is trained on the 80% split with scale_pos_weight.
 
   STEP 3 - STREAMING SIMULATION & INFERENCE
   The held-out 20% test split is fed through a generator-based
@@ -52,29 +53,29 @@
   SECTION 3 : CLASSIFICATION METRICS
 --------------------------------------------------------------------
 
-    Precision :                       0.957565
-    Recall :                          0.689918
-    F1-Score :                        0.802001
-    ROC-AUC :                         0.943100
+    Precision :                       0.000000
+    Recall :                          0.000000
+    F1-Score :                        0.000000
+    ROC-AUC :                         0.000000
 
   Confusion Matrix
   --------------------------------------
-    True Positives  (TP) :                37,684
-    True Negatives  (TN) :               232,053
-    False Positives (FP) :                 1,670
-    False Negatives (FN) :                16,937
+    True Positives  (TP) :                     0
+    True Negatives  (TN) :                28,913
+    False Positives (FP) :                     0
+    False Negatives (FN) :                     0
 
 --------------------------------------------------------------------
   SECTION 4 : STREAMING PERFORMANCE METRICS
 --------------------------------------------------------------------
 
-    Records Streamed :                4,506
-    Wall-clock Time (s) :             281.4781
-    Throughput (rec/s) :              16.01
-    Latency Mean   (ms) :             62.4097
-    Latency Median (ms) :             58.7360
-    Latency p95    (ms) :             82.1107
-    Latency p99    (ms) :             109.9025
-    Latency Max    (ms) :             166.7643
+    Records Streamed :                28,913
+    Wall-clock Time (s) :             227.8582
+    Throughput (rec/s) :              126.89
+    Latency Mean   (ms) :             7.6065
+    Latency Median (ms) :             7.3290
+    Latency p95    (ms) :             9.4662
+    Latency p99    (ms) :             12.5951
+    Latency Max    (ms) :             53.2537
 
 ====================================================================
