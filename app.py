@@ -1065,11 +1065,36 @@ def run_streamlit_dashboard() -> None:
     def _load_artifacts():
         errs = []
         scaler = model = None
+        
+        def _get_fallback_data():
+            import pandas as pd
+            for p in ["dataset/merged_mini.csv", "dataset/merged.csv"]:
+                path = Path(p)
+                if path.exists():
+                    df = pd.read_csv(path)
+                    df.columns = [c.strip() for c in df.columns]
+                    feat_cols = [c for c in df.columns if c not in {'Timestamp', 'Normal/Attack'} and df[c].dtype != object]
+                    df_normal = df[df['Normal/Attack'].str.strip() == 'Normal']
+                    X_normal = df_normal[feat_cols].fillna(0).values.astype(np.float32)
+                    return X_normal
+            return None
+
         if SCALER_PATH.exists():
             try:
                 scaler = joblib.load(SCALER_PATH)
             except Exception as e:
-                errs.append(f"Scaler load error: {e}")
+                st.warning(f"Scaler loading failed ({e}). Fitting a fresh Scaler on the fly...")
+                try:
+                    X_train = _get_fallback_data()
+                    if X_train is not None:
+                        from sklearn.preprocessing import StandardScaler
+                        scaler = StandardScaler()
+                        scaler.fit(X_train)
+                        st.success("Successfully fitted a fresh Scaler on the fly!")
+                    else:
+                        errs.append(f"Scaler load error and training data not found: {e}")
+                except Exception as ex:
+                    errs.append(f"Fallback scaler fitting failed: {ex}")
         else:
             errs.append(f"Scaler not found at {SCALER_PATH} — run app.py CLI first to train.")
         
@@ -1080,7 +1105,19 @@ def run_streamlit_dashboard() -> None:
             try:
                 model = joblib.load(model_path)
             except Exception as e:
-                errs.append(f"Model load error: {e}")
+                st.warning(f"Model loading failed ({e}). Training a fresh Isolation Forest detector on the fly...")
+                try:
+                    X_train = _get_fallback_data()
+                    if X_train is not None:
+                        if scaler is not None:
+                            X_train = scaler.transform(X_train)
+                        model = IsoForestDetector()
+                        model.fit(X_train)
+                        st.success("Successfully trained a fresh Isolation Forest detector on the fly!")
+                    else:
+                        errs.append(f"Model load error and training data not found: {e}")
+                except Exception as ex:
+                    errs.append(f"Fallback model training failed: {ex}")
         else:
             errs.append(f"Model not found at {model_path} — run app.py CLI first to train.")
         return model, scaler, errs
