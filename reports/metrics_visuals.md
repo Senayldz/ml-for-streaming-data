@@ -1,50 +1,44 @@
-# SWaT Streaming Anomaly Detection Metrics
+# SWaT Streaming Anomaly Detection Metrics (Temporal Split & Isolation Forest)
 
-Based on the evaluation pipeline using LightGBM, here are the detailed performance and latency metrics, along with their visualizations.
+Based on the evaluation pipeline using **Isolation Forest** with a chronological **Temporal Split (80/20)**, here are the detailed performance and latency metrics.
 
 > [!NOTE]
-> The evaluation was run on a held-out 20% stratified test split from `merged.csv`, processing 100,000 streaming records at 57,000 RPS.
+> The model was trained **exclusively on Normal data** (first 80% of the dataset, 1,153,375 records), with zero exposure to siber attacks during training. The evaluation was run on the remaining 20% test split (288,344 records) which contains an attack ratio of 18.94%.
 
 ## 1. Classification Metrics
 
-The model achieves near-perfect performance on the test dataset:
+The model achieves strong, realistic generalization performance without any data leakage:
 
 | Metric | Score | Note |
 |---|---|---|
-| **Precision** | 0.9949 | Minimum false alarms |
-| **Recall** | 0.9997 | Almost zero missed attacks |
-| **F1-Score** | 0.9973 | Excellent harmonic balance |
-| **ROC-AUC** | 0.9999 | Outstanding separability |
-
-![Classification Metrics](classification_metrics.png)
+| **Precision** | 0.9576 | Extremely low false alarms, high confidence alerts |
+| **Recall** | 0.6899 | Detects ~69% of attack records |
+| **F1-Score** | 0.8020 | Strong harmonic balance for unsupervised detection |
+| **ROC-AUC** | 0.9431 | Outlier rank score |
 
 ## 2. Confusion Matrix
 
-The confusion matrix breakdown on 100,000 evaluated records demonstrates the highly imbalanced nature of the dataset and how the model handled it successfully:
+The confusion matrix breakdown on 288,344 evaluated records:
 
 | Label | True Normal | True Attack |
 |---|---|---|
-| **Predicted Normal** | 96,207 (TN) | 1 (FN) |
-| **Predicted Attack** | 19 (FP) | 3,773 (TP) |
-
-![Confusion Matrix](confusion_matrix.png)
+| **Predicted Normal** | 232,053 (TN) | 16,937 (FN) |
+| **Predicted Attack** | 1,670 (FP) | 37,684 (TP) |
 
 > [!IMPORTANT]
-> The **False Negatives (FN) is 1**, meaning only **one attack record** slipped through undetected. This is critical for industrial security.
+> The **False Positives (FP) is 1,670**, representing a **False Alarm Rate of only 0.71%**. In a real-world control room, this keeps operator alert fatigue extremely low while still flagging 37,684 attack records.
 
 ## 3. Streaming Inference Performance (Latency)
 
-The model is highly optimized for real-time inference (on CPU only):
+The unsupervised Isolation Forest model processes batches efficiently:
 
-- **Throughput:** ~57,000 records per second
-- **Mean Latency:** 4.22 ms (per batch of 256)
-- **95th Percentile (p95):** 4.59 ms
-- **99th Percentile (p99):** 4.98 ms
-
-![Latency Metrics](latency_metrics.png)
+- **Throughput:** ~3,727 records per second (14.57 batches of 256 records/sec)
+- **Mean Latency:** 68.42 ms (per batch of 256)
+- **95th Percentile (p95):** 74.87 ms
+- **99th Percentile (p99):** 83.24 ms
 
 > [!TIP]
-> The sub-5ms mean latency makes this pipeline highly capable of handling real-time IoT scale ingestion from PLCs without backpressure.
+> A sub-70ms latency per batch allows real-time inference on streaming industrial IoT data without causing any backpressure.
 
 ---
 

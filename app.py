@@ -270,6 +270,8 @@ class IsoForestDetector(BaseDetector):
         self.model.fit(X)
         scores = -self.model.score_samples(X)
         self._threshold = float(np.percentile(scores, 96))
+        self._min_score = float(scores.min())
+        self._max_score = float(scores.max())
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -278,10 +280,14 @@ class IsoForestDetector(BaseDetector):
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         scores = -self.model.score_samples(X)
-        lo, hi = scores.min(), scores.max()
+        if hasattr(self, "_min_score") and hasattr(self, "_max_score"):
+            lo, hi = self._min_score, self._max_score
+        else:
+            lo, hi = scores.min(), scores.max()
         if hi == lo:
             return np.zeros(len(scores), dtype=np.float32)
-        return ((scores - lo) / (hi - lo)).astype(np.float32)
+        proba = (scores - lo) / (hi - lo)
+        return np.clip(proba, 0.0, 1.0).astype(np.float32)
 
 
 if _TORCH_AVAILABLE:
@@ -360,6 +366,8 @@ class AutoencoderDetector(BaseDetector):
         with torch.no_grad():
             errors = self._ae.reconstruction_error(dataset.to(self.device)).cpu().numpy()
         self._threshold = float(np.percentile(errors, self.threshold_percentile))
+        self._min_error = float(errors.min())
+        self._max_error = float(errors.max())
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -368,10 +376,14 @@ class AutoencoderDetector(BaseDetector):
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         errors = self._reconstruction_errors(X)
-        lo, hi = errors.min(), errors.max()
+        if hasattr(self, "_min_error") and hasattr(self, "_max_error"):
+            lo, hi = self._min_error, self._max_error
+        else:
+            lo, hi = errors.min(), errors.max()
         if hi == lo:
             return np.zeros(len(errors), dtype=np.float32)
-        return ((errors - lo) / (hi - lo)).astype(np.float32)
+        proba = (errors - lo) / (hi - lo)
+        return np.clip(proba, 0.0, 1.0).astype(np.float32)
 
     def _reconstruction_errors(self, X: np.ndarray) -> np.ndarray:
         self._ae.eval()
@@ -554,30 +566,28 @@ def stage_train(scaler, model_name: str, train_rows: Optional[int], no_retrain: 
     if no_retrain and model_path.exists():
         _print_step("Stage 2 | Loading saved model (--no-retrain)")
         detector = BaseDetector.load(model_path)
-        print("  -> Rebuilding test split from merged.csv for evaluation...")
+        print("  -> Rebuilding test split (temporal) from merged.csv for evaluation...")
         X, y, _ = load_and_preprocess(MERGED_CSV, scaler=scaler, chunksize=100_000)
-        _, X_test, _, y_test = train_test_split(
-            X, y, test_size=0.2, stratify=y, random_state=42
-        )
+        split_idx = int(len(X) * 0.8)
+        X_test = X[split_idx:]
+        y_test = y[split_idx:]
         print(f"  -> Test set: {len(X_test):,} rows  |  attack rate: {y_test.mean():.4f}")
         return detector, X_test, y_test
 
     _print_step("Stage 2 | Training model")
     print(f"  -> Backend  : {model_name.upper()}")
-    print(f"  -> Data     : {MERGED_CSV}  (80/20 stratified split)")
+    print(f"  -> Data     : {MERGED_CSV}  (80/20 temporal split)")
 
     nrows = train_rows
     print(f"  -> Loading {'all' if nrows is None else nrows} rows...")
     t0 = time.perf_counter()
     X, y, _ = load_and_preprocess(MERGED_CSV, scaler=scaler, chunksize=100_000)
     if nrows and nrows < len(X):
-        X, _, y, _ = train_test_split(
-            X, y, train_size=nrows, stratify=y, random_state=42
-        )
+        X, y = X[:nrows], y[:nrows]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42
-    )
+    split_idx = int(len(X) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
     print(f"  -> Train: {len(X_train):,}  |  Test: {len(X_test):,}")
     print(f"  -> Attack ratio  train={y_train.mean():.4f}  test={y_test.mean():.4f}")
 
@@ -908,9 +918,9 @@ def generate_presentation() -> None:
     add_rect(s1, Inches(1.2), Inches(1.0), Inches(10.9), Inches(5.5), fill=BG_CARD, line_color=ACCENT_B, line_width=Pt(1))
     add_text(s1, "🛡️  SWaT Network Anomaly Detection", Inches(1.5), Inches(1.4), Inches(10), Inches(1.0), size=Pt(36), bold=True, color=WHITE)
     add_text(s1, "Streaming ML Pipeline - Evaluation Report", Inches(1.5), Inches(2.5), Inches(10), Inches(0.6), size=Pt(20), color=ACCENT_B)
-    add_text(s1, "LightGBM . Real-Time Inference . SWaT Dataset", Inches(1.5), Inches(3.2), Inches(10), Inches(0.5), size=Pt(13), color=SUBTEXT)
+    add_text(s1, "Isolation Forest . Real-Time Inference . SWaT Dataset", Inches(1.5), Inches(3.2), Inches(10), Inches(0.5), size=Pt(13), color=SUBTEXT)
     add_rect(s1, Inches(1.5), Inches(3.85), Inches(4), Pt(2), fill=ACCENT_G)
-    add_text(s1, "Precision  0.994   |   Recall  0.999   |   F1  0.997   |   AUC  0.999", Inches(1.5), Inches(4.0), Inches(10), Inches(0.45), size=Pt(12), bold=True, color=ACCENT_G)
+    add_text(s1, "Precision  0.958   |   Recall  0.690   |   F1  0.802   |   AUC  0.943", Inches(1.5), Inches(4.0), Inches(10), Inches(0.45), size=Pt(12), bold=True, color=ACCENT_G)
     add_text(s1, "Confidential - Internal Use Only", Inches(1.5), Inches(6.6), Inches(10), Inches(0.4), size=Pt(9), italic=True, color=SUBTEXT)
     add_rect(s1, 0, 0, SLIDE_W, Inches(0.06), fill=ACCENT_B)
 
@@ -922,10 +932,10 @@ def generate_presentation() -> None:
     add_text(s2, "Secure Water Treatment (SWaT) Anomaly Detection", Inches(0.55), Inches(0.7), Inches(12), Inches(0.7), size=Pt(26), bold=True, color=WHITE)
 
     BULLETS = [
-        ("🎯 Objective", "Detect cyber-physical attacks on industrial control systems in real-time with sub-5ms latency and >99% recall, ensuring no attack event is missed."),
-        ("📦 Dataset", "SWaT benchmark - 496,800 sensor records (51 features) from a real water treatment plant. Attack rate ~ 3.8 %. Merged CSV: normal + 36 attack scenarios."),
-        ("⚙️ Approach", "Incremental StandardScaler -> LightGBM binary classifier (scale_pos_weight) -> Streaming inference engine with ThroughputTracker -> Live Streamlit dashboard."),
-        ("🏆 Outcome", "Production-ready pipeline achieving 99.9% recall at 57,000 RPS with 4.23 ms mean batch latency on CPU-only hardware."),
+        ("🎯 Objective", "Detect cyber-physical attacks on industrial control systems in real-time with low latency and high precision using a realistic temporal split."),
+        ("📦 Dataset", "SWaT benchmark - 1.44 million sensor records (51 features) from a real water treatment plant. 80/20 chronological train/test split."),
+        ("⚙️ Approach", "Incremental StandardScaler -> Unsupervised Isolation Forest (trained only on normal data) -> Streaming engine with ThroughputTracker -> Live Streamlit dashboard."),
+        ("🏆 Outcome", "Production-ready unsupervised pipeline achieving 95.8% precision, 69.0% recall, and 0.71% false alarm rate under realistic chronological deployment."),
     ]
     for i, (title, body) in enumerate(BULLETS):
         top = Inches(1.7) + i * Inches(1.3)
@@ -941,9 +951,9 @@ def generate_presentation() -> None:
     add_text(s3, "End-to-End Streaming Inference Pipeline", Inches(0.55), Inches(0.7), Inches(12), Inches(0.65), size=Pt(24), bold=True, color=WHITE)
 
     STAGES = [
-        (ACCENT_B,  "01",  "Data Ingestion",    "SWaT CSV\n496K rows\n51 features"),
+        (ACCENT_B,  "01",  "Data Ingestion",    "SWaT CSV\n1.44M rows\n51 features"),
         (ACCENT_G,  "02",  "Preprocessing",     "Incremental\nStandardScaler\npartial_fit"),
-        (ACCENT_Y,  "03",  "LightGBM\nModel",   "300 trees\nscale_pos_weight\nROC-AUC 0.999"),
+        (ACCENT_Y,  "03",  "Isolation Forest",  "100 estimators\ncontamination=0.04\nUnsupervised"),
         (ACCENT_B,  "04",  "Stream Engine",     "Batch generator\nThrottled Hz\nThroughputTracker"),
         (ACCENT_G,  "05",  "Live Dashboard",    "Streamlit UI\nPlotly charts\n800ms refresh"),
     ]
@@ -971,18 +981,18 @@ def generate_presentation() -> None:
     add_rect(s4, 0, 0, SLIDE_W, SLIDE_H, fill=BG_DARK)
     add_rect(s4, 0, 0, SLIDE_W, Inches(0.06), fill=ACCENT_G)
     add_text(s4, "CLASSIFICATION PERFORMANCE", Inches(0.55), Inches(0.25), Inches(10), Inches(0.5), size=Pt(10), bold=True, color=ACCENT_G)
-    add_text(s4, "LightGBM Detector - Held-Out Test Set (20%)", Inches(0.55), Inches(0.7), Inches(12), Inches(0.65), size=Pt(24), bold=True, color=WHITE)
+    add_text(s4, "Isolation Forest Detector - Held-Out Test Set (20%)", Inches(0.55), Inches(0.7), Inches(12), Inches(0.65), size=Pt(24), bold=True, color=WHITE)
 
-    kpi_card(s4, "PRECISION",  "99.4%", "of detections are true", Inches(0.55), Inches(1.55), val_color=ACCENT_B)
-    kpi_card(s4, "RECALL",     "99.9%", "of attacks caught", Inches(3.3),  Inches(1.55), val_color=ACCENT_G)
-    kpi_card(s4, "F1-SCORE",   "99.7%", "harmonic mean", Inches(6.05), Inches(1.55), val_color=ACCENT_Y)
-    kpi_card(s4, "ROC-AUC",    "99.9%", "area under ROC curve", Inches(8.8),  Inches(1.55), val_color=ACCENT_B)
+    kpi_card(s4, "PRECISION",  "95.8%", "of detections are true", Inches(0.55), Inches(1.55), val_color=ACCENT_B)
+    kpi_card(s4, "RECALL",     "69.0%", "of attacks caught", Inches(3.3),  Inches(1.55), val_color=ACCENT_G)
+    kpi_card(s4, "F1-SCORE",   "80.2%", "harmonic mean", Inches(6.05), Inches(1.55), val_color=ACCENT_Y)
+    kpi_card(s4, "ROC-AUC",    "94.3%", "area under ROC curve", Inches(8.8),  Inches(1.55), val_color=ACCENT_B)
 
     # Confusion matrix
     TABLE_DATA = [
         ["",            "Pred: Normal", "Pred: Attack"],
-        ["True: Normal","TN  OK",        "FP  Warning"],
-        ["True: Attack", "FN  Miss",      "TP  OK"],
+        ["True: Normal","TN: 232,053",  "FP: 1,670"],
+        ["True: Attack","FN: 16,937",   "TP: 37,684"],
     ]
     COL_W = [Inches(2.2), Inches(2.5), Inches(2.5)]
     ROW_H = Inches(0.55)
@@ -1002,7 +1012,7 @@ def generate_presentation() -> None:
 
     add_rect(s4, Inches(7.5), Inches(3.85), Inches(5.3), Inches(2.1), fill=RGBColor(0x0E, 0x2A, 0x17), line_color=ACCENT_G, line_width=Pt(1))
     add_text(s4, "Key Result", Inches(7.65), Inches(3.95), Inches(5.0), Inches(0.4), size=Pt(11), bold=True, color=ACCENT_G)
-    add_text(s4, "Near-perfect recall (99.9%) ensures virtually no attack event goes undetected. Precision of 99.4% minimizes operator alert fatigue.", Inches(7.65), Inches(4.4), Inches(5.0), Inches(1.4), size=Pt(9.5), color=WHITE)
+    add_text(s4, "Unsupervised model learns only normal states, achieving a 95.8% precision with an extremely low false alarm rate of 0.71%. This avoids operator fatigue while catching 69.0% of siber attack events in chronological time.", Inches(7.65), Inches(4.4), Inches(5.0), Inches(1.4), size=Pt(9.5), color=WHITE)
 
     # Save PPTX
     OUTPUT = ROOT_DIR / "reports" / "SWaT_Evaluation_Report.pptx"
@@ -1062,13 +1072,17 @@ def run_streamlit_dashboard() -> None:
                 errs.append(f"Scaler load error: {e}")
         else:
             errs.append(f"Scaler not found at {SCALER_PATH} — run app.py CLI first to train.")
-        if LGBM_PATH.exists():
+        
+        iso_path = ARTIFACTS_DIR / "isoforest_detector.joblib"
+        model_path = iso_path if iso_path.exists() else LGBM_PATH
+        
+        if model_path.exists():
             try:
-                model = joblib.load(LGBM_PATH)
+                model = joblib.load(model_path)
             except Exception as e:
                 errs.append(f"Model load error: {e}")
         else:
-            errs.append(f"Model not found at {LGBM_PATH} — run app.py CLI first to train.")
+            errs.append(f"Model not found at {model_path} — run app.py CLI first to train.")
         return model, scaler, errs
 
     # Worker Thread
