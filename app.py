@@ -640,7 +640,7 @@ def stage_stream_inference(detector, X_test, y_test, stream_rows: int, batch_siz
     return y_pred, y_prob, y_stream, tracker
 
 
-def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict) -> str:
+def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict, model_name: str = "lgbm") -> str:
     W = 68
     def sep(c="="): return c * W
     def row(label, value): return f"  {label:<36}{value}"
@@ -656,6 +656,34 @@ def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict) -> str:
         if cur.strip():
             lines.append(indent + cur.rstrip())
         return "\n".join(lines)
+
+    model_disp = "LightGBM (LGBMClassifier)"
+    imbalance_disp = "scale_pos_weight (auto ratio ~25x)"
+    hyper_disp = "n_estimators=300, max_depth=6, lr=0.1"
+    preprocess_disp = "Incremental StandardScaler (sklearn)"
+    baseline_disp = "IsolationForest (contamination=0.04)"
+    
+    if model_name.lower() == "isoforest":
+        model_disp = "Isolation Forest (Unsupervised)"
+        imbalance_disp = "N/A (Unsupervised anomaly detection)"
+        hyper_disp = "n_estimators=100, contamination=0.04"
+        baseline_disp = "N/A (Primary model is Isolation Forest)"
+    elif model_name.lower() == "autoencoder":
+        model_disp = "Autoencoder (Unsupervised Neural Network)"
+        imbalance_disp = "N/A (Unsupervised anomaly detection)"
+        hyper_disp = "latent_dim=8, epochs=10, lr=0.001"
+        baseline_disp = "IsolationForest (contamination=0.04)"
+
+    step2_desc = (
+        "merged.csv (normal + attack rows) is loaded and split 80/20 "
+        "with stratification to preserve the 3.8% attack ratio. "
+        "LightGBM is trained on the 80% split with scale_pos_weight."
+    )
+    if model_name.lower() in ("isoforest", "autoencoder"):
+        step2_desc = (
+            f"The unsupervised {model_name.upper()} model is trained exclusively "
+            "on the normal operation records from the 80% temporal split."
+        )
 
     sections = [
         sep("="),
@@ -675,11 +703,11 @@ def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict) -> str:
         row("  Files :", "normal.csv  |  attack.csv  |  merged.csv"),
         "",
         "  ALGORITHMS & LIBRARIES",
-        row("  Primary Detector :", "LightGBM (LGBMClassifier)"),
-        row("  Class Imbalance Handling :", "scale_pos_weight (auto ratio ~25x)"),
-        row("  Hyperparameters :", "n_estimators=300, max_depth=6, lr=0.1"),
-        row("  Preprocessing :", "Incremental StandardScaler (sklearn)"),
-        row("  Unsupervised Baseline :", "IsolationForest (contamination=0.04)"),
+        row("  Primary Detector :", model_disp),
+        row("  Class Imbalance Handling :", imbalance_disp),
+        row("  Hyperparameters :", hyper_disp),
+        row("  Preprocessing :", preprocess_disp),
+        row("  Unsupervised Baseline :", baseline_disp),
         row("  Streaming Engine :", "Python generators (batch + record mode)"),
         row("  Dashboard :", "Streamlit + Plotly (real-time thread-safe)"),
         "",
@@ -697,11 +725,7 @@ def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict) -> str:
         ),
         "",
         "  STEP 2 - MODEL TRAINING",
-        wrap(
-            "merged.csv (normal + attack rows) is loaded and split 80/20 "
-            "with stratification to preserve the 3.8% attack ratio. "
-            "LightGBM is trained on the 80% split with scale_pos_weight."
-        ),
+        wrap(step2_desc),
         "",
         "  STEP 3 - STREAMING SIMULATION & INFERENCE",
         wrap(
@@ -752,7 +776,7 @@ def _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf: dict) -> str:
     return "\n".join(sections)
 
 
-def stage_evaluate(y_true, y_pred, y_prob, tracker: ThroughputTracker):
+def stage_evaluate(y_true, y_pred, y_prob, tracker: ThroughputTracker, model_name: str = "lgbm"):
     _print_step("Stage 4 | Evaluation")
 
     prec   = precision_score(y_true, y_pred, zero_division=0)
@@ -786,7 +810,7 @@ def stage_evaluate(y_true, y_pred, y_prob, tracker: ThroughputTracker):
     print(f"  TN={tn:,}  FP={fp:,}")
     print(f"  FN={fn:,}  TP={tp:,}")
 
-    report_text = _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf)
+    report_text = _build_report_txt(prec, rec, f1, auc, tp, tn, fp, fn, perf, model_name)
     print("\n\n" + report_text)
 
     report_path = ROOT_DIR / "reports" / "report.txt"
@@ -813,7 +837,7 @@ def run_pipeline(args) -> None:
     y_pred, y_prob, y_true, tracker = stage_stream_inference(
         detector, X_test, y_test, args.stream_rows, args.batch_size
     )
-    stage_evaluate(y_true, y_pred, y_prob, tracker)
+    stage_evaluate(y_true, y_pred, y_prob, tracker, model_name=args.model)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

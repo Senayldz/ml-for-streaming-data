@@ -15,11 +15,11 @@
     Files :                           normal.csv  |  attack.csv  |  merged.csv
 
   ALGORITHMS & LIBRARIES
-    Primary Detector :                LightGBM (LGBMClassifier)
-    Class Imbalance Handling :        scale_pos_weight (auto ratio ~25x)
-    Hyperparameters :                 n_estimators=300, max_depth=6, lr=0.1
+    Primary Detector :                Isolation Forest (Unsupervised)
+    Class Imbalance Handling :        N/A (Unsupervised anomaly detection)
+    Hyperparameters :                 n_estimators=100, contamination=0.04
     Preprocessing :                   Incremental StandardScaler (sklearn)
-    Unsupervised Baseline :           IsolationForest (contamination=0.04)
+    Unsupervised Baseline :           N/A (Primary model is Isolation Forest)
     Streaming Engine :                Python generators (batch + record mode)
     Dashboard :                       Streamlit + Plotly (real-time thread-safe)
 
@@ -35,9 +35,8 @@
   exclusively on normal.csv via partial_fit, then persisted.
 
   STEP 2 - MODEL TRAINING
-  merged.csv (normal + attack rows) is loaded and split 80/20
-  with stratification to preserve the 3.8% attack ratio. LightGBM
-  is trained on the 80% split with scale_pos_weight.
+  The unsupervised ISOFOREST model is trained exclusively on the
+  normal operation records from the 80% temporal split.
 
   STEP 3 - STREAMING SIMULATION & INFERENCE
   The held-out 20% test split is fed through a generator-based
@@ -70,12 +69,12 @@
 --------------------------------------------------------------------
 
     Records Streamed :                4,506
-    Wall-clock Time (s) :             267.9684
-    Throughput (rec/s) :              16.82
-    Latency Mean   (ms) :             59.4076
-    Latency Median (ms) :             58.3332
-    Latency p95    (ms) :             66.7662
-    Latency p99    (ms) :             78.2556
-    Latency Max    (ms) :             163.4115
+    Wall-clock Time (s) :             281.4781
+    Throughput (rec/s) :              16.01
+    Latency Mean   (ms) :             62.4097
+    Latency Median (ms) :             58.7360
+    Latency p95    (ms) :             82.1107
+    Latency p99    (ms) :             109.9025
+    Latency Max    (ms) :             166.7643
 
 ====================================================================
