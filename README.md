@@ -2,14 +2,14 @@
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ml-for-streaming-data-ttzdt5cixfpqq6gkdedse7.streamlit.app/)
 
-A real-time, high-performance streaming machine learning pipeline and interactive dashboard for cyber-physical attack detection on the **Secure Water Treatment (SWaT)** industrial dataset. Built with LightGBM, Streamlit, and Plotly, this system features sub-5ms inference latency, thread-safe background streaming simulation, and a fully responsive user interface.
+A real-time, high-performance streaming machine learning pipeline and interactive dashboard for cyber-physical attack detection on the **Secure Water Treatment (SWaT)** industrial dataset. Built with unsupervised Isolation Forest, Streamlit, and Plotly, this system features sub-70ms batch inference latency, thread-safe background streaming simulation, and a fully responsive user interface.
 
 ---
 
 ## 🚀 Key Features
 
 * **Incremental Streaming Pipeline:** Simulates live PLC sensor/actuator data ingestion with mini-batch generation.
-* **LightGBM Detector backend:** Optimized binary classifier with imbalance mitigation (`scale_pos_weight`) achieving **99.9% Recall** and **99.5% Precision**.
+* **Unsupervised Anomaly Detector:** Isolation Forest baseline trained exclusively on normal operations, achieving a highly realistic **95.8% Precision**, **69.0% Recall**, and **94.3% ROC-AUC** under a strict temporal split.
 * **Real-time Interactive Dashboard:** 
   * Live-updating Threat Score charts (Plotly).
   * Attack injection simulator (Valve, Pump, Tank attacks) to test detector responsiveness.
@@ -22,39 +22,38 @@ A real-time, high-performance streaming machine learning pipeline and interactiv
 
 ## 📊 Performance & Evaluation Results
 
-The pipeline was validated using a held-out 20% stratified test split from `merged.csv`, evaluating **100,000 records** on standard CPU hardware.
+The pipeline was validated using a held-out 20% chronological test split from `merged.csv`, evaluating the full **288,344 records** on standard CPU hardware.
 
 ### 1. Classification Metrics
-The model achieves near-perfect separation between normal operations and attack vectors:
+The unsupervised model achieves highly realistic, robust separation without any time-series data leakage:
 
 | Metric | Score | Detail |
 |---|---|---|
-| **Precision** | **99.50%** | Minimizes false alarms and operator alert fatigue |
-| **Recall** | **99.97%** | Almost zero missed attacks (Critical for critical infrastructure) |
-| **F1-Score** | **99.74%** | Optimal harmonic balance under class imbalance |
-| **ROC-AUC** | **99.99%** | Outstanding probability-based class separability |
+| **Precision** | **95.76%** | Extremely low false alarm rate (0.71%), avoiding operator fatigue |
+| **Recall** | **68.99%** | Catches 69% of cyber-physical attacks with zero prior exposure to attack patterns |
+| **F1-Score** | **80.20%** | Strong overall harmonic balance for an unsupervised detector |
+| **ROC-AUC** | **94.31%** | Strong global class separability based on anomaly scores |
 
-![Classification Metrics](reports/classification_metrics.png)
+> [!NOTE]
+> **Why are these results realistic compared to 99.9% metrics?**
+> Supervised models trained on **randomly shuffled splits** suffer from severe time-series **Data Leakage**. Shuffling puts adjacent seconds of the same attack sequences into both train and test splits, causing the model to memorize the specific signatures.
+> By switching to a **chronological Temporal Split (80/20)**, the model is trained exclusively on normal operation data and tested on subsequent unseen timeline blocks. The unsupervised Isolation Forest learns what normal looks like, resulting in a robust, generalizable model for actual production environments.
 
 ### 2. Confusion Matrix
-Out of 100,000 evaluated records, only **1 attack record** went undetected:
+On the 288,344 test records, the model achieves a low False Alarm Rate of **0.71%**:
 
 | Actual \ Predicted | Predicted Normal | Predicted Attack |
 |---|---|---|
-| **True Normal** | **96,207** (True Negative) | **19** (False Positive) |
-| **True Attack** | **1** (False Negative) | **3,773** (True Positive) |
-
-![Confusion Matrix](reports/confusion_matrix.png)
+| **True Normal** | **232,053** (True Negative) | **1,670** (False Positive) |
+| **True Attack** | **16,937** (False Negative) | **37,684** (True Positive) |
 
 ### 3. Real-Time Streaming Latency
-The inference engine is designed for high-throughput, low-latency applications:
+The inference engine is designed for real-time edge applications:
 
-* **Throughput:** ~57,000 records / second.
-* **Mean Batch Latency (batch=256):** **4.22 ms**
-* **p95 Latency:** **4.59 ms**
-* **p99 Latency:** **4.98 ms**
-
-![Latency Metrics](reports/latency_metrics.png)
+* **Throughput:** ~3,727 records / second (batch=256).
+* **Mean Batch Latency (batch=256):** **68.42 ms**
+* **p95 Latency:** **74.87 ms**
+* **p99 Latency:** **83.24 ms**
 
 ---
 
